@@ -22,14 +22,33 @@ class UtilityCommands {
                 case 'avatar':
                     return this.handleAvatar(message, args);
                 case 'serverlogo':
-                case 'banner':
                     return this.handleServerLogo(message);
+                case 'banner':
+                    return this.handleBannerText(message, args);
                 case 'roleinfo':
                     return this.handleRoleInfo(message, args);
                 case 'rename':
                     return this.handleRename(message, args);
                 case 'srvpasuse':
                     return this.handleServerPause(message);
+                case 'serverinfo':
+                    return this.handleServerInfoText(message);
+                case 'rolecolor':
+                    return this.handleRoleColorText(message, args);
+                case 'membercount':
+                    return this.handleMemberCountText(message);
+                case 'botstats':
+                    return this.handleBotStatsText(message);
+                case 'invite':
+                    return this.handleInviteText(message);
+                case 'uptime':
+                    return this.handleUptimeText(message);
+                case 'emojis':
+                    return this.handleEmojisText(message);
+                case 'stickers':
+                    return this.handleStickersText(message);
+                case 'boosters':
+                    return this.handleBoostersText(message);
                 default:
                     return false;
             }
@@ -385,6 +404,239 @@ class UtilityCommands {
             await message.reply('❌ Failed to pause server invites. Make sure I have the Manage Server permission.');
         }
 
+        return true;
+    }
+
+    // Text command handlers for new commands
+    async handleServerInfoText(message) {
+        const guild = message.guild;
+        await guild.members.fetch();
+
+        const embed = new EmbedBuilder()
+            .setColor('#2A1E36')
+            .setTitle(`🏰 ${guild.name}`)
+            .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
+            .addFields(
+                { name: '🆔 Server ID', value: `\`${guild.id}\``, inline: true },
+                { name: '👑 Owner', value: `<@${guild.ownerId}>`, inline: true },
+                { name: '📅 Created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:R>`, inline: true },
+                { name: '👥 Members', value: `${guild.memberCount}`, inline: true },
+                { name: '💬 Channels', value: `${guild.channels.cache.size}`, inline: true },
+                { name: '🎭 Roles', value: `${guild.roles.cache.size}`, inline: true },
+                { name: '🎨 Emojis', value: `${guild.emojis.cache.size}`, inline: true },
+                { name: '🎪 Stickers', value: `${guild.stickers.cache.size}`, inline: true },
+                { name: '💎 Boost Level', value: `Level ${guild.premiumTier}`, inline: true },
+                { name: '🚀 Boosts', value: `${guild.premiumSubscriptionCount || 0}`, inline: true },
+                { name: '🔒 Verification', value: guild.verificationLevel.toString(), inline: true }
+            )
+            .setTimestamp();
+
+        if (guild.bannerURL()) {
+            embed.setImage(guild.bannerURL({ size: 1024 }));
+        }
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleBannerText(message, args) {
+        const user = message.mentions.users.first() || message.author;
+        const fetchedUser = await user.fetch(true);
+
+        if (!fetchedUser.bannerURL()) {
+            await message.reply('❌ This user has no banner set');
+            return true;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(fetchedUser.accentColor || '#0099FF')
+            .setTitle(`🎨 ${user.username}'s Banner`)
+            .setImage(fetchedUser.bannerURL({ size: 1024 }))
+            .addFields(
+                { name: '🔗 Links', value: `[PNG](${fetchedUser.bannerURL({ extension: 'png', size: 1024 })}) | [JPG](${fetchedUser.bannerURL({ extension: 'jpg', size: 1024 })}) | [WEBP](${fetchedUser.bannerURL({ extension: 'webp', size: 1024 })})`, inline: false }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleRoleColorText(message, args) {
+        const role = message.mentions.roles.first();
+        
+        if (!role) {
+            await message.reply('❌ Please mention a role to check its color. Usage: `!rolecolor @role`');
+            return true;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(role.color || '#000000')
+            .setTitle(`🎨 ${role.name} Color`)
+            .addFields(
+                { name: '🔢 Hex', value: role.hexColor, inline: true },
+                { name: '🔢 RGB', value: `${(role.color >> 16) & 255}, ${(role.color >> 8) & 255}, ${role.color & 255}`, inline: true },
+                { name: '🔢 Integer', value: `${role.color}`, inline: true },
+                { name: '👥 Members', value: `${role.members.size}`, inline: true },
+                { name: '📊 Position', value: `${role.position}`, inline: true },
+                { name: '🔹 Hoisted', value: role.hoist ? 'Yes' : 'No', inline: true }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleMemberCountText(message) {
+        const guild = message.guild;
+        await guild.members.fetch();
+
+        const total = guild.memberCount;
+        const humans = guild.members.cache.filter(m => !m.user.bot).size;
+        const bots = guild.members.cache.filter(m => m.user.bot).size;
+        const online = guild.members.cache.filter(m => m.presence?.status === 'online').size;
+        const idle = guild.members.cache.filter(m => m.presence?.status === 'idle').size;
+        const dnd = guild.members.cache.filter(m => m.presence?.status === 'dnd').size;
+
+        const embed = new EmbedBuilder()
+            .setColor('#0099FF')
+            .setTitle('📊 Member Statistics')
+            .addFields(
+                { name: '👥 Total Members', value: `${total}`, inline: true },
+                { name: '👤 Humans', value: `${humans}`, inline: true },
+                { name: '🤖 Bots', value: `${bots}`, inline: true },
+                { name: '🟢 Online', value: `${online}`, inline: true },
+                { name: '🟡 Idle', value: `${idle}`, inline: true },
+                { name: '🔴 DND', value: `${dnd}`, inline: true }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleBotStatsText(message) {
+        const uptime = process.uptime();
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+
+        const embed = new EmbedBuilder()
+            .setColor('#00FF00')
+            .setTitle('🤖 Bot Statistics')
+            .setThumbnail(this.client.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: '⏰ Uptime', value: `${days}d ${hours}h ${minutes}m`, inline: true },
+                { name: '📡 Ping', value: `${Math.round(this.client.ws.ping)}ms`, inline: true },
+                { name: '🏰 Servers', value: `${this.client.guilds.cache.size}`, inline: true },
+                { name: '👥 Users', value: `${this.client.users.cache.size}`, inline: true },
+                { name: '💬 Channels', value: `${this.client.channels.cache.size}`, inline: true },
+                { name: '💾 Memory', value: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`, inline: true }
+            )
+            .setFooter({ text: 'Made with ❤️ at ScriptSpace' })
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleInviteText(message) {
+        const invite = `https://discord.com/api/oauth2/authorize?client_id=${this.client.user.id}&permissions=8&scope=bot%20applications.commands`;
+
+        const embed = new EmbedBuilder()
+            .setColor('#0099FF')
+            .setTitle('🔗 Invite Bot')
+            .setDescription(`[Click here to invite ${this.client.user.username}](${invite})`)
+            .addFields(
+                { name: '🔑 Permissions', value: 'Administrator', inline: true },
+                { name: '📊 Servers', value: `${this.client.guilds.cache.size}`, inline: true }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleUptimeText(message) {
+        const uptime = process.uptime();
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = Math.floor(uptime % 60);
+
+        const embed = new EmbedBuilder()
+            .setColor('#00FF00')
+            .setTitle('⏰ Bot Uptime')
+            .setDescription(`**${days}** days, **${hours}** hours, **${minutes}** minutes, **${seconds}** seconds`)
+            .addFields(
+                { name: '📅 Started', value: `<t:${Math.floor((Date.now() - uptime * 1000) / 1000)}:F>`, inline: true }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleEmojisText(message) {
+        const emojis = message.guild.emojis.cache;
+
+        if (emojis.size === 0) {
+            await message.reply('❌ No custom emojis in this server');
+            return true;
+        }
+
+        const emojiList = emojis.map(e => `${e} \`:${e.name}:\``).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setColor('#0099FF')
+            .setTitle(`🎨 Server Emojis (${emojis.size})`)
+            .setDescription(emojiList.substring(0, 4096))
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleStickersText(message) {
+        const stickers = message.guild.stickers.cache;
+
+        if (stickers.size === 0) {
+            await message.reply('❌ No custom stickers in this server');
+            return true;
+        }
+
+        const stickerList = stickers.map(s => `**${s.name}** - ${s.description || 'No description'}`).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setColor('#0099FF')
+            .setTitle(`🎪 Server Stickers (${stickers.size})`)
+            .setDescription(stickerList.substring(0, 4096))
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    async handleBoostersText(message) {
+        const boosters = message.guild.members.cache.filter(m => m.premiumSince);
+
+        if (boosters.size === 0) {
+            await message.reply('❌ No server boosters');
+            return true;
+        }
+
+        const boosterList = boosters.map(m => `${m.user.username} - Boosting since <t:${Math.floor(m.premiumSince.getTime() / 1000)}:R>`).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setColor('#FF69B4')
+            .setTitle(`💎 Server Boosters (${boosters.size})`)
+            .setDescription(boosterList.substring(0, 4096))
+            .addFields(
+                { name: '🚀 Boost Level', value: `Level ${message.guild.premiumTier}`, inline: true },
+                { name: '💫 Total Boosts', value: `${message.guild.premiumSubscriptionCount || 0}`, inline: true }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
         return true;
     }
 

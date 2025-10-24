@@ -5238,11 +5238,12 @@ client.on('messageCreate', async message => {
 
     // === UTILITY COMMANDS ===
     
-    const utilityCommands = ['ping', 'dev', 'ui', 'userinfo', 'dm', 'fck', 'avatar', 'serverlogo', 'roleinfo', 'rename', 'srvpasuse'];
+    const utilityCommands = ['ping', 'dev', 'ui', 'userinfo', 'dm', 'fck', 'avatar', 'serverlogo', 'banner', 'roleinfo', 'rename', 'srvpasuse', 'serverinfo', 'rolecolor', 'membercount', 'botstats', 'invite', 'uptime', 'emojis', 'stickers', 'boosters'];
     
     if (utilityCommands.includes(command)) {
-        // ping, dev, and avatar are accessible to everyone, others require authorization
-        if (command === 'ping' || command === 'dev' || command === 'avatar' || isAuthorized(message)) {
+        // ping, dev, avatar, serverinfo, banner, membercount, botstats, invite, uptime, emojis, stickers, boosters are accessible to everyone, others require authorization
+        const publicCommands = ['ping', 'dev', 'avatar', 'serverinfo', 'banner', 'membercount', 'botstats', 'invite', 'uptime', 'emojis', 'stickers', 'boosters'];
+        if (publicCommands.includes(command) || isAuthorized(message)) {
             try {
                 await utilityManager.handleCommand(message, command, args);
             } catch (error) {

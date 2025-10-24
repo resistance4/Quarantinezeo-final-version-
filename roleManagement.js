@@ -577,6 +577,257 @@ class RoleManager {
         await this.sendLogMessage(message.guild, embed);
     }
 
+    // Add Role Command
+    async addRole(message, args) {
+        if (!this.isAuthorized(message)) {
+            return message.reply('❌ You are not authorized to use this command.');
+        }
+
+        if (message.mentions.users.size === 0 || message.mentions.roles.size === 0) {
+            return message.reply('❌ Please mention a user and a role. Usage: `addrole @user @role`');
+        }
+
+        const addRoleUser = message.mentions.users.first();
+        const addRole = message.mentions.roles.first();
+
+        if (addRole.managed) {
+            return message.reply('❌ Cannot assign managed roles (bot roles, booster role, etc.)');
+        }
+
+        if (addRole.position >= message.guild.members.me.roles.highest.position) {
+            return message.reply('❌ I cannot assign roles higher than or equal to my highest role.');
+        }
+
+        try {
+            const member = await message.guild.members.fetch(addRoleUser.id);
+            await member.roles.add(addRole);
+
+            const addRoleEmbed = new EmbedBuilder()
+                .setColor('#00FF00')
+                .setTitle('➕ Role Added')
+                .setDescription(`Successfully added role to user`)
+                .addFields(
+                    { name: '👤 User', value: `${addRoleUser.username} (\`${addRoleUser.id}\`)`, inline: true },
+                    { name: '🎭 Role', value: `${addRole}`, inline: true },
+                    { name: '👑 Added By', value: `${message.author.username}`, inline: true },
+                    { name: '⏰ Added At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+                )
+                .setFooter({ text: 'Role Management System' })
+                .setTimestamp();
+
+            await message.reply({ embeds: [addRoleEmbed] });
+            await this.sendLogMessage(message.guild, addRoleEmbed);
+        } catch (error) {
+            console.error('Error adding role:', error);
+            await message.reply('❌ Could not add role to this user. Make sure I have the Manage Roles permission.');
+        }
+    }
+
+    // Remove Role Command
+    async removeRole(message, args) {
+        if (!this.isAuthorized(message)) {
+            return message.reply('❌ You are not authorized to use this command.');
+        }
+
+        if (message.mentions.users.size === 0 || message.mentions.roles.size === 0) {
+            return message.reply('❌ Please mention a user and a role. Usage: `removerole @user @role`');
+        }
+
+        const removeRoleUser = message.mentions.users.first();
+        const removeRole = message.mentions.roles.first();
+
+        if (removeRole.managed) {
+            return message.reply('❌ Cannot remove managed roles (bot roles, booster role, etc.)');
+        }
+
+        if (removeRole.position >= message.guild.members.me.roles.highest.position) {
+            return message.reply('❌ I cannot manage roles higher than or equal to my highest role.');
+        }
+
+        try {
+            const member = await message.guild.members.fetch(removeRoleUser.id);
+            await member.roles.remove(removeRole);
+
+            const removeRoleEmbed = new EmbedBuilder()
+                .setColor('#FF6B6B')
+                .setTitle('➖ Role Removed')
+                .setDescription(`Successfully removed role from user`)
+                .addFields(
+                    { name: '👤 User', value: `${removeRoleUser.username} (\`${removeRoleUser.id}\`)`, inline: true },
+                    { name: '🎭 Role', value: `${removeRole}`, inline: true },
+                    { name: '👑 Removed By', value: `${message.author.username}`, inline: true },
+                    { name: '⏰ Removed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+                )
+                .setFooter({ text: 'Role Management System' })
+                .setTimestamp();
+
+            await message.reply({ embeds: [removeRoleEmbed] });
+            await this.sendLogMessage(message.guild, removeRoleEmbed);
+        } catch (error) {
+            console.error('Error removing role:', error);
+            await message.reply('❌ Could not remove role from this user. Make sure I have the Manage Roles permission.');
+        }
+    }
+
+    // List Roles Command  
+    async listRoles(message) {
+        if (!this.isAuthorized(message)) {
+            return message.reply('❌ You are not authorized to use this command.');
+        }
+
+        try {
+            // Get all roles except @everyone and sort by position (highest first)
+            const allRoles = message.guild.roles.cache
+                .filter(role => role.id !== message.guild.id)
+                .sort((a, b) => b.position - a.position);
+            
+            // Group roles by categories for better organization
+            const adminRoles = allRoles.filter(role => role.permissions.has('Administrator'));
+            const moderatorRoles = allRoles.filter(role => 
+                !role.permissions.has('Administrator') && 
+                (role.permissions.has('ModerateMembers') || role.permissions.has('ManageMessages') || role.permissions.has('KickMembers') || role.permissions.has('BanMembers'))
+            );
+            const specialRoles = allRoles.filter(role => 
+                !role.permissions.has('Administrator') && 
+                !role.permissions.has('ModerateMembers') && 
+                !role.permissions.has('ManageMessages') && 
+                !role.permissions.has('KickMembers') && 
+                !role.permissions.has('BanMembers') &&
+                (role.hoist || role.mentionable || role.color !== 0)
+            );
+            const regularRoles = allRoles.filter(role => 
+                !adminRoles.some(adminRole => adminRole.id === role.id) && 
+                !moderatorRoles.some(modRole => modRole.id === role.id) && 
+                !specialRoles.some(specialRole => specialRole.id === role.id)
+            );
+
+            // Create role cards with 5 roles per card
+            const createRoleCards = () => {
+                const cards = [];
+                
+                // Overview Card
+                let overviewDescription = `**ᯓᡣ𐭩 SERVER ROLE OVERVIEW**\n\n`;
+                overviewDescription += `❀ **${allRoles.size}** Total Roles\n`;
+                overviewDescription += `✿ **${adminRoles.size}** Administrator Roles\n`;
+                overviewDescription += `❀ **${moderatorRoles.size}** Moderator Roles\n`;
+                overviewDescription += `✿ **${specialRoles.size}** Special Roles\n`;
+                overviewDescription += `❀ **${regularRoles.size}** Regular Roles\n\n`;
+
+                // Role Statistics
+                overviewDescription += `## ✿ **ROLE STATISTICS**\n\n`;
+                const rolesWithMembers = allRoles.filter(role => role.members.size > 0).size;
+                const emptyRoles = allRoles.size - rolesWithMembers;
+                const coloredRoles = allRoles.filter(role => role.color !== 0).size;
+                const hoistedRoles = allRoles.filter(role => role.hoist).size;
+                const mentionableRoles = allRoles.filter(role => role.mentionable).size;
+
+                overviewDescription += `❀ **${rolesWithMembers}** roles have members\n`;
+                overviewDescription += `✿ **${emptyRoles}** roles are empty\n`;
+                overviewDescription += `❀ **${coloredRoles}** roles have custom colors\n`;
+                overviewDescription += `✿ **${hoistedRoles}** roles are hoisted\n`;
+                overviewDescription += `❀ **${mentionableRoles}** roles are mentionable\n`;
+
+                cards.push({
+                    title: 'ᯓᡣ𐭩 **Server Roles Overview**',
+                    description: overviewDescription,
+                    footer: `Card 1/${Math.ceil(allRoles.size / 5) + 1} • Overview • ${allRoles.size} total roles`
+                });
+
+                // Create cards for roles (5 per card)
+                const allRolesArray = Array.from(allRoles.values());
+                for (let i = 0; i < allRolesArray.length; i += 5) {
+                    const roleChunk = allRolesArray.slice(i, i + 5);
+                    const cardNumber = Math.floor(i / 5) + 2;
+                    const totalCards = Math.ceil(allRoles.size / 5) + 1;
+                    
+                    let cardDescription = `**ᯓᡣ𐭩 ROLES ${i + 1}-${Math.min(i + 5, allRolesArray.length)}**\n\n`;
+
+                    roleChunk.forEach((role, index) => {
+                        const memberCount = role.members.size;
+                        const features = [];
+                        
+                        // Add role type indicators
+                        if (role.permissions.has('Administrator')) {
+                            features.push('👑 Admin');
+                        } else if (role.permissions.has('ModerateMembers') || role.permissions.has('ManageMessages') || role.permissions.has('KickMembers') || role.permissions.has('BanMembers')) {
+                            features.push('⚖️ Mod');
+                        }
+                        
+                        if (role.hoist) features.push('📌 Hoisted');
+                        if (role.mentionable) features.push('📢 Mentionable');
+                        if (role.color !== 0) features.push('🎨 Colored');
+                        
+                        const colorDisplay = role.color !== 0 ? `🎨` : '⚪';
+                        const featureText = features.length > 0 ? ` • ${features.join(' ')}` : '';
+                        
+                        cardDescription += `${colorDisplay} ${role} (${memberCount} members${featureText})\n`;
+                        cardDescription += `   Position: ${role.position} • ID: \`${role.id}\`\n\n`;
+                    });
+
+                    cards.push({
+                        title: `ᯓᡣ𐭩 **Server Roles (${i + 1}-${Math.min(i + 5, allRolesArray.length)})**`,
+                        description: cardDescription,
+                        footer: `Card ${cardNumber}/${totalCards} • Roles ${i + 1}-${Math.min(i + 5, allRolesArray.length)} of ${allRoles.size}`
+                    });
+                }
+
+                return cards;
+            };
+
+            const roleCards = createRoleCards();
+            let currentCardIndex = 0;
+
+            // Create initial embed
+            const createEmbed = (cardData) => {
+                return new EmbedBuilder()
+                    .setColor('#af7cd2')
+                    .setAuthor({
+                        name: 'Quarantianizo made at discord.gg/scriptspace by script.agi',
+                        iconURL: 'https://cdn.discordapp.com/attachments/1377710452653424711/1410001205639254046/a964ff33-1eaf-49ed-b487-331b3ffe3ebd.gif'
+                    })
+                    .setTitle(cardData.title)
+                    .setDescription(cardData.description)
+                    .setThumbnail(message.guild.iconURL({ dynamic: true, size: 256 }))
+                    .setImage('https://cdn.discordapp.com/attachments/1377710452653424711/1410001205639254046/a964ff33-1eaf-49ed-b487-331b3ffe3ebd.gif')
+                    .setFooter({
+                        text: `${cardData.footer} • Auto-cycling every 5s • Made with ❤️ at ScriptSpace`,
+                        iconURL: 'https://cdn.discordapp.com/attachments/1377710452653424711/1410001205639254046/a964ff33-1eaf-49ed-b487-331b3ffe3ebd.gif'
+                    })
+                    .setTimestamp();
+            };
+
+            // Send initial message
+            const rolesMessage = await message.reply({ 
+                embeds: [createEmbed(roleCards[currentCardIndex])] 
+            });
+
+            // Auto-cycling system (5 seconds per card)
+            const rolesCycleInterval = setInterval(async () => {
+                try {
+                    currentCardIndex = (currentCardIndex + 1) % roleCards.length;
+                    const updatedEmbed = createEmbed(roleCards[currentCardIndex]);
+                    
+                    await rolesMessage.edit({ embeds: [updatedEmbed] });
+                    console.log(`🎭 Roles card updated to ${currentCardIndex + 1}/${roleCards.length} for ${message.author.username}`);
+                    
+                } catch (error) {
+                    console.error('Error updating roles card:', error);
+                    clearInterval(rolesCycleInterval);
+                }
+            }, 5000); // 5 seconds per card
+
+            // Stop auto-cycling after 5 minutes (60 cycles)
+            setTimeout(() => {
+                clearInterval(rolesCycleInterval);
+                console.log(`🎭 Roles auto-cycling stopped for ${message.author.username}`);
+            }, 300000); // 5 minutes
+
+        } catch (error) {
+            console.error('Error listing roles:', error);
+            await message.reply('❌ Failed to list roles. Please try again.');
+        }
+    }
+
     // Handle all role management commands
     async handleCommand(message, command, args) {
         switch (command) {
@@ -609,6 +860,15 @@ class RoleManager {
                 break;
             case 'catorole':
                 await this.handleCategoryRole(message, args);
+                break;
+            case 'addrole':
+                await this.addRole(message, args);
+                break;
+            case 'removerole':
+                await this.removeRole(message, args);
+                break;
+            case 'roles':
+                await this.listRoles(message);
                 break;
         }
     }

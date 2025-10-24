@@ -432,20 +432,20 @@ class RoleManager {
 
         const subCommand = args[0]?.toLowerCase();
         
-        if (subCommand !== 'add') {
-            return message.reply('❌ Invalid subcommand. Usage: `catorole add <category_id> @role`');
+        if (!subCommand || (subCommand !== 'add' && subCommand !== 'sync')) {
+            return message.reply('❌ Invalid subcommand. Usage:\n• `catorole add <category_id> @role`\n• `catorole sync <category_id> @role`');
         }
 
         // Get category ID from args[1]
         const categoryId = args[1];
         if (!categoryId) {
-            return message.reply('❌ Please provide a category ID. Usage: `catorole add <category_id> @role`');
+            return message.reply('❌ Please provide a category ID. Usage: `catorole ' + subCommand + ' <category_id> @role`');
         }
 
         // Get role from mentions
         const role = message.mentions.roles.first();
         if (!role) {
-            return message.reply('❌ Please mention a role. Usage: `catorole add <category_id> @role`');
+            return message.reply('❌ Please mention a role. Usage: `catorole ' + subCommand + ' <category_id> @role`');
         }
 
         // Find the category
@@ -477,41 +477,86 @@ class RoleManager {
 
         let successCount = 0;
         let failCount = 0;
-        const processingMessage = await message.reply(`⏳ Processing... Adding ${role} permissions to ${channelsInCategory.size} channels in category **${category.name}**`);
+        const actionText = subCommand === 'sync' ? 'Synchronizing' : 'Adding';
+        const processingMessage = await message.reply(`⏳ Processing... ${actionText} ${role} permissions to ${channelsInCategory.size} channels in category **${category.name}**`);
 
-        // Add role permissions to each channel in the category
-        for (const [channelId, channel] of channelsInCategory) {
-            try {
-                await channel.permissionOverwrites.edit(role, {
-                    ViewChannel: true,
-                    SendMessages: true,
-                    ReadMessageHistory: true
-                }, `Category role added by ${message.author.username}`);
-                successCount++;
-            } catch (error) {
-                console.error(`Error adding role permissions to ${channel.name}:`, error);
-                failCount++;
+        if (subCommand === 'sync') {
+            // SYNC mode: Copy category permissions to all channels
+            const categoryPermissions = category.permissionOverwrites.cache.get(role.id);
+            
+            if (!categoryPermissions) {
+                await processingMessage.edit('❌ Role does not have permission overrides in the category. Add permissions to the category first.');
+                return;
             }
+
+            // Sync permissions from category to all channels
+            for (const [channelId, channel] of channelsInCategory) {
+                try {
+                    // Copy the exact permissions from category to channel
+                    await channel.permissionOverwrites.edit(role, {
+                        ...categoryPermissions.allow.toArray().reduce((acc, perm) => ({ ...acc, [perm]: true }), {}),
+                        ...categoryPermissions.deny.toArray().reduce((acc, perm) => ({ ...acc, [perm]: false }), {})
+                    }, `Category role synchronized by ${message.author.username}`);
+                    successCount++;
+                } catch (error) {
+                    console.error(`Error syncing role permissions to ${channel.name}:`, error);
+                    failCount++;
+                }
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor('#00D4FF')
+                .setTitle('🔄 Category Role Synchronization Complete')
+                .setDescription(`Successfully synchronized role permissions from category to all channels`)
+                .addFields(
+                    { name: '📁 Category', value: `${category.name} (\`${category.id}\`)`, inline: true },
+                    { name: '🎭 Role', value: `${role}`, inline: true },
+                    { name: '👑 Executed By', value: `${message.author.username}`, inline: true },
+                    { name: '✅ Successful', value: `${successCount}`, inline: true },
+                    { name: '❌ Failed', value: `${failCount}`, inline: true },
+                    { name: '📊 Total Channels', value: `${channelsInCategory.size}`, inline: true },
+                    { name: '⏰ Completed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+                )
+                .setFooter({ text: 'Category Role Management System - Sync Mode' })
+                .setTimestamp();
+
+            await processingMessage.edit({ content: null, embeds: [embed] });
+            await this.sendLogMessage(message.guild, embed);
+        } else {
+            // ADD mode: Add basic permissions to all channels
+            for (const [channelId, channel] of channelsInCategory) {
+                try {
+                    await channel.permissionOverwrites.edit(role, {
+                        ViewChannel: true,
+                        SendMessages: true,
+                        ReadMessageHistory: true
+                    }, `Category role added by ${message.author.username}`);
+                    successCount++;
+                } catch (error) {
+                    console.error(`Error adding role permissions to ${channel.name}:`, error);
+                    failCount++;
+                }
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor('#00D4FF')
+                .setTitle('✅ Category Role Assignment Complete')
+                .setDescription(`Finished adding role permissions to channels in category`)
+                .addFields(
+                    { name: '📁 Category', value: `${category.name} (\`${category.id}\`)`, inline: true },
+                    { name: '🎭 Role', value: `${role}`, inline: true },
+                    { name: '👑 Executed By', value: `${message.author.username}`, inline: true },
+                    { name: '✅ Successful', value: `${successCount}`, inline: true },
+                    { name: '❌ Failed', value: `${failCount}`, inline: true },
+                    { name: '📊 Total Channels', value: `${channelsInCategory.size}`, inline: true },
+                    { name: '⏰ Completed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+                )
+                .setFooter({ text: 'Category Role Management System' })
+                .setTimestamp();
+
+            await processingMessage.edit({ content: null, embeds: [embed] });
+            await this.sendLogMessage(message.guild, embed);
         }
-
-        const embed = new EmbedBuilder()
-            .setColor('#00D4FF')
-            .setTitle('✅ Category Role Assignment Complete')
-            .setDescription(`Finished adding role permissions to channels in category`)
-            .addFields(
-                { name: '📁 Category', value: `${category.name} (\`${category.id}\`)`, inline: true },
-                { name: '🎭 Role', value: `${role}`, inline: true },
-                { name: '👑 Executed By', value: `${message.author.username}`, inline: true },
-                { name: '✅ Successful', value: `${successCount}`, inline: true },
-                { name: '❌ Failed', value: `${failCount}`, inline: true },
-                { name: '📊 Total Channels', value: `${channelsInCategory.size}`, inline: true },
-                { name: '⏰ Completed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
-            )
-            .setFooter({ text: 'Category Role Management System' })
-            .setTimestamp();
-
-        await processingMessage.edit({ content: null, embeds: [embed] });
-        await this.sendLogMessage(message.guild, embed);
     }
 
     // Role All Command - Give a role to all members who have another role

@@ -430,14 +430,14 @@ class RoleManager {
             return message.reply('❌ You are not authorized to use this command.');
         }
 
-        const subCommand = args[1]?.toLowerCase();
+        const subCommand = args[0]?.toLowerCase();
         
         if (subCommand !== 'add') {
             return message.reply('❌ Invalid subcommand. Usage: `catorole add <category_id> @role`');
         }
 
-        // Get category ID from args[2]
-        const categoryId = args[2];
+        // Get category ID from args[1]
+        const categoryId = args[1];
         if (!categoryId) {
             return message.reply('❌ Please provide a category ID. Usage: `catorole add <category_id> @role`');
         }

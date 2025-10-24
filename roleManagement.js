@@ -424,6 +424,96 @@ class RoleManager {
         }
     }
 
+    // Category Role Command - Add role to all channels in a category
+    async handleCategoryRole(message, args) {
+        if (!this.isAuthorized(message)) {
+            return message.reply('❌ You are not authorized to use this command.');
+        }
+
+        const subCommand = args[1]?.toLowerCase();
+        
+        if (subCommand !== 'add') {
+            return message.reply('❌ Invalid subcommand. Usage: `catorole add <category_id> @role`');
+        }
+
+        // Get category ID from args[2]
+        const categoryId = args[2];
+        if (!categoryId) {
+            return message.reply('❌ Please provide a category ID. Usage: `catorole add <category_id> @role`');
+        }
+
+        // Get role from mentions
+        const role = message.mentions.roles.first();
+        if (!role) {
+            return message.reply('❌ Please mention a role. Usage: `catorole add <category_id> @role`');
+        }
+
+        // Find the category
+        const category = message.guild.channels.cache.get(categoryId);
+        if (!category) {
+            return message.reply('❌ Category not found. Please provide a valid category ID.');
+        }
+
+        if (category.type !== 4) { // 4 is GUILD_CATEGORY
+            return message.reply('❌ The provided ID is not a category.');
+        }
+
+        if (role.managed) {
+            return message.reply('❌ Cannot assign managed roles (bot roles, booster role, etc.)');
+        }
+
+        if (role.position >= message.guild.members.me.roles.highest.position) {
+            return message.reply('❌ I cannot manage roles higher than or equal to my highest role.');
+        }
+
+        // Get all channels in the category
+        const channelsInCategory = message.guild.channels.cache.filter(
+            channel => channel.parentId === categoryId && (channel.type === 0 || channel.type === 2) // Text or Voice
+        );
+
+        if (channelsInCategory.size === 0) {
+            return message.reply('❌ No channels found in this category.');
+        }
+
+        let successCount = 0;
+        let failCount = 0;
+        const processingMessage = await message.reply(`⏳ Processing... Adding ${role} permissions to ${channelsInCategory.size} channels in category **${category.name}**`);
+
+        // Add role permissions to each channel in the category
+        for (const [channelId, channel] of channelsInCategory) {
+            try {
+                await channel.permissionOverwrites.edit(role, {
+                    ViewChannel: true,
+                    SendMessages: true,
+                    ReadMessageHistory: true
+                }, `Category role added by ${message.author.username}`);
+                successCount++;
+            } catch (error) {
+                console.error(`Error adding role permissions to ${channel.name}:`, error);
+                failCount++;
+            }
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor('#00D4FF')
+            .setTitle('✅ Category Role Assignment Complete')
+            .setDescription(`Finished adding role permissions to channels in category`)
+            .addFields(
+                { name: '📁 Category', value: `${category.name} (\`${category.id}\`)`, inline: true },
+                { name: '🎭 Role', value: `${role}`, inline: true },
+                { name: '👑 Executed By', value: `${message.author.username}`, inline: true },
+                { name: '✅ Successful', value: `${successCount}`, inline: true },
+                { name: '❌ Failed', value: `${failCount}`, inline: true },
+                { name: '📊 Total Channels', value: `${channelsInCategory.size}`, inline: true },
+                { name: '⏰ Completed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+            )
+            .setFooter({ text: 'Category Role Management System' })
+            .setTimestamp();
+
+        await processingMessage.edit({ content: null, embeds: [embed] });
+        await this.sendLogMessage(message.guild, embed);
+    }
+
     // Role All Command - Give a role to all members who have another role
     async roleAll(message, args) {
         if (!this.isAuthorized(message)) {
@@ -516,6 +606,9 @@ class RoleManager {
                 break;
             case 'roleall':
                 await this.roleAll(message, args);
+                break;
+            case 'catorole':
+                await this.handleCategoryRole(message, args);
                 break;
         }
     }

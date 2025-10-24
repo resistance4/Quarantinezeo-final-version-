@@ -5129,7 +5129,8 @@ client.on('messageCreate', async message => {
         'roleall',
         'addrole',
         'removerole',
-        'roles'
+        'roles',
+        'catorole'
     ];
 
     if (roleCommands.includes(command)) {
